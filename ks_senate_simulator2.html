@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>2026 Kansas Senate Race — Turnout Simulator</title>
+<style>
+  :root {
+    --accent: #146356;
+    --accent-tint: #E4F3EF;
+    --ink: #12151C;
+    --muted: #667085;
+    --line: #E4E7EC;
+    --bg: #F5F6F8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+  }
+  #app {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 20px 16px 32px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .title {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .subtitle {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .row-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .gauge-track {
+    margin-top: 10px;
+    height: 10px;
+    border-radius: 6px;
+    background: #EDEFF2;
+    overflow: hidden;
+    position: relative;
+  }
+  .gauge-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 50%;
+    background: #C7CCD3;
+    transition: width 120ms ease-out, background 120ms ease-out;
+  }
+  .gauge-mid {
+    position: absolute;
+    left: 50%; top: -2px; bottom: -2px;
+    width: 1px;
+    background: #9AA1AC;
+  }
+  .gauge-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .group-name { font-size: 14px; font-weight: 700; }
+  .group-registered { font-size: 11.5px; color: var(--muted); }
+  .slider-block { margin-bottom: 14px; }
+  .slider-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .slider-label { font-size: 12.5px; color: var(--muted); letter-spacing: 0.2px; }
+  .value-stepper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .slider-value {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+    min-width: 34px;
+    text-align: right;
+  }
+  .step-btn {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    flex: none;
+    padding: 0;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .step-btn:active { background: var(--accent-tint); }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  input[type="range"] {
+    flex: 1;
+    width: 100%;
+    height: 4px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .group-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11.5px;
+    color: var(--muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--muted); font-weight: 600; padding-bottom: 6px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  td { padding: 6px 0; text-align: right; }
+  tr.data-row { border-top: 1px solid var(--line); }
+  tr.total-row { border-top: 2px solid var(--line); font-weight: 700; }
+  .table-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+  .preset-row { display: flex; gap: 8px; }
+  button {
+    flex: 1;
+    padding: 10px 0;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-neutral {
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+  }
+  .btn-baseline {
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+  const GROUPS = [
+    { key: "rep", label: "Republican", registered: 891106 },
+    { key: "unaff", label: "Unaffiliated", registered: 596216 },
+    { key: "dem", label: "Democratic", registered: 496464 },
+  ];
+
+  const NEUTRAL = {
+    turnout: { rep: 0.5, unaff: 0.5, dem: 0.5 },
+    pctDem: { rep: 0.5, unaff: 0.5, dem: 0.5 },
+  };
+
+  const BASELINE = {
+    turnout: { rep: 0.55, unaff: 0.55, dem: 0.55 },
+    pctDem: { rep: 0.12, unaff: 0.67, dem: 1.0 },
+  };
+
+  let state = {
+    turnout: { ...NEUTRAL.turnout },
+    pctDem: { ...NEUTRAL.pctDem },
+  };
+
+  function fmt(n) {
+    return Math.round(n).toLocaleString("en-US");
+  }
+  function pct(n, digits = 0) {
+    return (n * 100).toFixed(digits) + "%";
+  }
+
+  function computeRows() {
+    return GROUPS.map((g) => {
+      const t = state.turnout[g.key];
+      const d = state.pctDem[g.key];
+      const turnoutVotes = Math.round(g.registered * t);
+      const votesDem = turnoutVotes * d;
+      const votesRep = turnoutVotes * (1 - d);
+      return { ...g, t, d, turnoutVotes, votesDem, votesRep };
+    });
+  }
+
+  function render() {
+    const rows = computeRows();
+    const totals = rows.reduce(
+      (acc, r) => ({
+        dem: acc.dem + r.votesDem,
+        rep: acc.rep + r.votesRep,
+        turnoutSum: acc.turnoutSum + r.turnoutVotes,
+      }),
+      { dem: 0, rep: 0, turnoutSum: 0 }
+    );
+    const cast = totals.dem + totals.rep;
+    const demShare = cast > 0 ? totals.dem / cast : 0.5;
+    const winner =
+      Math.round(totals.dem) === Math.round(totals.rep)
+        ? "tie"
+        : totals.dem > totals.rep
+        ? "dem"
+        : "rep";
+    const margin = Math.abs(totals.dem - totals.rep);
+    const marginPct = cast > 0 ? margin / cast : 0;
+
+    const app = document.getElementById("app");
+    app.innerHTML = `
+      <div class="eyebrow">Turnout simulator</div>
+      <div class="title">2026 Kansas Senate race</div>
+      <div class="subtitle">Move the sliders to test turnout and vote-share scenarios by party affiliation.</div>
+      <div style="height:16px"></div>
+
+      <div class="card">
+        <div class="row-between">
+          <span style="font-size:13px; font-weight:700; letter-spacing:0.3px;">
+            ${winner === "tie" ? "Dead even" : winner === "dem" ? "Democrat leads" : "Republican leads"}
+          </span>
+          <span class="tabular" style="font-size:12.5px; color:var(--muted);">
+            +${fmt(margin)} votes (${pct(marginPct, 1)})
+          </span>
+        </div>
+        <div class="gauge-track">
+          <div class="gauge-fill" style="width:${demShare * 100}%; background:${winner === "dem" ? "var(--accent)" : "#C7CCD3"};"></div>
+          <div class="gauge-mid"></div>
+        </div>
+        <div class="gauge-labels tabular">
+          <span>D ${fmt(totals.dem)}</span>
+          <span>R ${fmt(totals.rep)}</span>
+        </div>
+      </div>
+
+      ${rows.map((r) => `
+        <div class="card">
+          <div class="group-header">
+            <span class="group-name">${r.label}</span>
+            <span class="group-registered tabular">${fmt(r.registered)} registered</span>
+          </div>
+
+          <div class="slider-block">
+            <div class="slider-label-row">
+              <span class="slider-label">Percent turnout</span>
+              <div class="value-stepper">
+                <button type="button" class="step-btn" onclick="stepTurnout('${r.key}', -0.01)" aria-label="Decrease turnout 1 percent">&minus;</button>
+                <span class="slider-value tabular">${pct(r.t)}</span>
+                <button type="button" class="step-btn" onclick="stepTurnout('${r.key}', 0.01)" aria-label="Increase turnout 1 percent">+</button>
+              </div>
+            </div>
+            <div class="slider-row">
+              <input type="range" min="0.25" max="0.75" step="0.01" value="${r.t}"
+                oninput="updateTurnout('${r.key}', this.value)" />
+            </div>
+          </div>
+
+          <div class="slider-block" style="margin-bottom:0;">
+            <div class="slider-label-row">
+              <span class="slider-label">Share voting Democrat</span>
+              <div class="value-stepper">
+                <button type="button" class="step-btn" onclick="stepPctDem('${r.key}', -0.01)" aria-label="Decrease Democrat share 1 percent">&minus;</button>
+                <span class="slider-value tabular">${pct(r.d)}</span>
+                <button type="button" class="step-btn" onclick="stepPctDem('${r.key}', 0.01)" aria-label="Increase Democrat share 1 percent">+</button>
+              </div>
+            </div>
+            <div class="slider-row">
+              <input type="range" min="0" max="1" step="0.01" value="${r.d}"
+                oninput="updatePctDem('${r.key}', this.value)" />
+            </div>
+          </div>
+
+          <div class="group-footer tabular">
+            <span>${fmt(r.turnoutVotes)} votes cast</span>
+            <span>D ${fmt(r.votesDem)} &middot; R ${fmt(r.votesRep)}</span>
+          </div>
+        </div>
+      `).join("")}
+
+      <div class="card">
+        <div class="table-title">Full breakdown</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Affiliation</th>
+              <th>Turnout</th>
+              <th>Dem</th>
+              <th>Rep</th>
+            </tr>
+          </thead>
+          <tbody class="tabular">
+            ${rows.map((r) => `
+              <tr class="data-row">
+                <td>${r.label}</td>
+                <td>${fmt(r.turnoutVotes)}</td>
+                <td>${fmt(r.votesDem)}</td>
+                <td>${fmt(r.votesRep)}</td>
+              </tr>
+            `).join("")}
+            <tr class="total-row">
+              <td>Total</td>
+              <td>${fmt(totals.turnoutSum)}</td>
+              <td>${fmt(totals.dem)}</td>
+              <td>${fmt(totals.rep)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="preset-row">
+        <button class="btn-neutral" onclick="applyPreset('neutral')">Reset to 50/50</button>
+        <button class="btn-baseline" onclick="applyPreset('baseline')">Kansas baseline</button>
+      </div>
+    `;
+  }
+
+  function clamp(n, min, max) {
+    return Math.min(max, Math.max(min, n));
+  }
+
+  function updateTurnout(key, value) {
+    state.turnout[key] = clamp(parseFloat(value), 0.25, 0.75);
+    render();
+  }
+
+  function updatePctDem(key, value) {
+    state.pctDem[key] = clamp(parseFloat(value), 0, 1);
+    render();
+  }
+
+  function stepTurnout(key, delta) {
+    const next = clamp(Math.round((state.turnout[key] + delta) * 100) / 100, 0.25, 0.75);
+    state.turnout[key] = next;
+    render();
+  }
+
+  function stepPctDem(key, delta) {
+    const next = clamp(Math.round((state.pctDem[key] + delta) * 100) / 100, 0, 1);
+    state.pctDem[key] = next;
+    render();
+  }
+
+  function applyPreset(name) {
+    const preset = name === "neutral" ? NEUTRAL : BASELINE;
+    state = {
+      turnout: { ...preset.turnout },
+      pctDem: { ...preset.pctDem },
+    };
+    render();
+  }
+
+  render();
+</script>
+</body>
+</html>
